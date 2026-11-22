@@ -1428,7 +1428,6 @@ onBeforeUnmount(() => {
           <div v-if="infoOpen" class="viewer-info" @click.stop>
             <header class="viewer-info-head">
               <h3>{{ detail.fileName ?? `照片 #${detail.id}` }}</h3>
-              <button class="viewer-btn" title="收起" @click="infoOpen = false">×</button>
             </header>
             <div class="modal-info">
               <template v-if="detail.totalScore != null">
