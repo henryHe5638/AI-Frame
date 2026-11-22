@@ -192,12 +192,30 @@ export default async function photoRoutes(app: FastifyInstance): Promise<void> {
     const dir = q.order === "asc" ? "ASC" : "DESC";
     const rows = db
       .prepare(
-        `SELECT id, takenAt, width, height FROM photos ${where} ORDER BY ${col} IS NULL, ${col} ${dir}, id ${dir}`
+        `SELECT id, takenAt, width, height,
+                json_extract(instruction, '$.crop.width') AS cw,
+                json_extract(instruction, '$.crop.height') AS ch,
+                json_extract(instruction, '$.rotate') AS rot
+         FROM photos ${where} ORDER BY ${col} IS NULL, ${col} ${dir}, id ${dir}`
       )
-      .all(...params) as Array<{ id: number; takenAt: string | null; width: number | null; height: number | null }>;
+      .all(...params) as Array<{
+      id: number;
+      takenAt: string | null;
+      width: number | null;
+      height: number | null;
+      cw: number | null;
+      ch: number | null;
+      rot: number | null;
+    }>;
     return reply.send({
       total: rows.length,
-      items: rows.map((r) => ({ id: r.id, t: r.takenAt, w: r.width, h: r.height })),
+      // w/h 返回装裱后的显示尺寸（裁剪 + 旋转 90/270 宽高互换），供照片墙按显示比例布局
+      items: rows.map((r) => {
+        let w = r.width != null && r.cw != null ? r.width * r.cw : r.width;
+        let h = r.height != null && r.ch != null ? r.height * r.ch : r.height;
+        if ((r.rot === 90 || r.rot === 270) && w != null && h != null) [w, h] = [h, w];
+        return { id: r.id, t: r.takenAt, w, h };
+      }),
     });
   });
 
