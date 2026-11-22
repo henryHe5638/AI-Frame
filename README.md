@@ -15,6 +15,16 @@
 
 **本项目全部由 Vibe Coding 完成**（AI 辅助生成代码，Kimi Code CLI 驱动），欢迎大家随意二次开发、魔改、提 Issue / PR。
 
+## 界面预览
+
+| 照片墙 | 详情与信息面板 |
+| --- | --- |
+| ![照片墙](docs/photos-wall.jpg) | ![详情](docs/photo-detail.jpg) |
+
+| 任务队列 | 轮播（漫画化） |
+| --- | --- |
+| ![任务队列](docs/queue.jpg) | ![轮播](docs/frame-cartoon.jpg) |
+
 ## 功能特性
 
 - **自动同步**：对接 Immich API，全量 + 增量轮询同步照片，支持 webhook
