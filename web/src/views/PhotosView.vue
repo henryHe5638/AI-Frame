@@ -1322,7 +1322,7 @@ onBeforeUnmount(() => {
             />
           </label>
           <div class="thumb">
-            <ArtFrame :photo="detailMap.get(b.i)!" />
+            <ArtFrame :photo="detailMap.get(b.i)!" fit="cover" />
           </div>
           <div class="overlay">
             <p v-if="detailMap.get(b.i)!.totalScore != null">总分 {{ detailMap.get(b.i)!.totalScore }} / 30</p>

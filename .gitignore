@@ -3,3 +3,6 @@ dist/
 server/data/
 *.log
 .DS_Store
+
+# docker compose 挂载的本地数据
+/data/
