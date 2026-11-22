@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><style>body{font-family:monospace;font-size:13px}</style></head>
+<body><pre id="out">loading…</pre>
+<script>
+const fonts = [{"id": "alibaba-puhuiti-regular", "family": "ALIBABA-PUHUITI-REGULAR", "url": "/fonts/ALIBABA-PUHUITI-REGULAR.OTF"}, {"id": "deng", "family": "DENG", "url": "/fonts/DENG.TTF"}, {"id": "dengb", "family": "DENGB", "url": "/fonts/DENGB.TTF"}, {"id": "dengl", "family": "DENGL", "url": "/fonts/DENGL.TTF"}, {"id": "fzjingleis", "family": "FZJingLeiS", "url": "/fonts/FZJingLeiS.TTF"}, {"id": "fzstjw", "family": "FZSTJW", "url": "/fonts/FZSTJW.TTF"}, {"id": "fzstk", "family": "FZSTK", "url": "/fonts/FZSTK.TTF"}, {"id": "fzybksjw", "family": "FZYBKSJW", "url": "/fonts/FZYBKSJW.TTF"}, {"id": "fzytk", "family": "FZYTK", "url": "/fonts/FZYTK.TTF"}, {"id": "fzyiyblsjw", "family": "FZYiYBLSJW", "url": "/fonts/FZYiYBLSJW.TTF"}, {"id": "fzzj-zsxkjw", "family": "FZZJ-ZSXKJW", "url": "/fonts/FZZJ-ZSXKJW.TTF"}, {"id": "hyxixingkaij", "family": "HYXiXingKaiJ", "url": "/fonts/HYXiXingKaiJ.ttf"}, {"id": "hyxingkaij", "family": "HYXingKaiJ", "url": "/fonts/HYXingKaiJ.ttf"}, {"id": "hyxujingxingkaiw", "family": "HYXuJingXingKaiW", "url": "/fonts/HYXuJingXingKaiW.ttf"}, {"id": "simfang", "family": "SIMFANG", "url": "/fonts/SIMFANG.TTF"}, {"id": "simhei", "family": "SIMHEI", "url": "/fonts/SIMHEI.TTF"}, {"id": "simkai", "family": "SIMKAI", "url": "/fonts/SIMKAI.TTF"}, {"id": "simli", "family": "SIMLI", "url": "/fonts/SIMLI.TTF"}, {"id": "simyou", "family": "SIMYOU", "url": "/fonts/SIMYOU.TTF"}, {"id": "stcaiyun", "family": "STCAIYUN", "url": "/fonts/STCAIYUN.TTF"}, {"id": "stfangso", "family": "STFANGSO", "url": "/fonts/STFANGSO.TTF"}, {"id": "sthupo", "family": "STHUPO", "url": "/fonts/STHUPO.TTF"}, {"id": "stkaiti", "family": "STKAITI", "url": "/fonts/STKAITI.TTF"}, {"id": "stliti", "family": "STLITI", "url": "/fonts/STLITI.TTF"}, {"id": "stsong", "family": "STSONG", "url": "/fonts/STSONG.TTF"}, {"id": "stxihei", "family": "STXIHEI", "url": "/fonts/STXIHEI.TTF"}, {"id": "stxingka", "family": "STXINGKA", "url": "/fonts/STXINGKA.TTF"}, {"id": "stxinwei", "family": "STXINWEI", "url": "/fonts/STXINWEI.TTF"}, {"id": "stzhongs", "family": "STZHONGS", "url": "/fonts/STZHONGS.TTF"}];
+(async () => {
+  const out = [];
+  for (const f of fonts) {
+    const face = new FontFace(f.family, "url(" + f.url + ")");
+    try {
+      await Promise.race([face.load(), new Promise((_, rej) => setTimeout(() => rej(new Error("timeout10s")), 10000)]);
+      document.fonts.add(face);
+      out.push("OK   " + f.id);
+    } catch (e) {
+      out.push("FAIL " + f.id + " :: " + (e && e.message ? e.message : e));
+    }
+    document.getElementById("out").textContent = out.join("\n");
+  }
+})();
+</script></body></html>

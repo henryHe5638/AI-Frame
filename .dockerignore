@@ -1,0 +1,6 @@
+# 构建上下文裁剪：镜像内自己构建 dist，本地产物与数据不进镜像
+**/node_modules
+**/dist
+server/data
+.git
+**/*.log

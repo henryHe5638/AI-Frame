@@ -1,0 +1,23 @@
+# 在 NAS 上直接 compose 起服务；镜像也可本地 docker save 后导入（见部署说明）
+services:
+  ai-frame:
+    image: ai-frame:latest
+    build: .
+    container_name: ai-frame
+    restart: unless-stopped
+    ports:
+      - "18046:3000"
+    # QNAP bridge 网络从容器访问不到宿主机自己的 IP:Port（回环不通）；
+    # Immich 跑在同机 docker 的 immich_default 网络里，直接挂进去用容器名访问
+    networks:
+      - default
+      - immich_default
+    volumes:
+      # 现有数据（app.db / cartoon / fonts）放在 compose 文件旁的 data/ 里
+      - ./data:/app/server/data
+    environment:
+      TZ: Asia/Shanghai
+
+networks:
+  immich_default:
+    external: true

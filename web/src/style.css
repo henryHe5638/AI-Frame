@@ -1,0 +1,140 @@
+@import "lxgw-wenkai-webfont/lxgwwenkai-regular.css";
+@import "@fontsource/ma-shan-zheng/chinese-simplified-400.css";
+@import "@fontsource/ma-shan-zheng/latin-400.css";
+@import "@fontsource/zcool-kuaile/chinese-simplified-400.css";
+@import "@fontsource/zcool-kuaile/latin-400.css";
+@import "@fontsource/zcool-qingke-huangyou/chinese-simplified-400.css";
+@import "@fontsource/zcool-qingke-huangyou/latin-400.css";
+@import "@fontsource/zcool-xiaowei/chinese-simplified-400.css";
+@import "@fontsource/zcool-xiaowei/latin-400.css";
+@import "@fontsource/zhi-mang-xing/chinese-simplified-400.css";
+@import "@fontsource/zhi-mang-xing/latin-400.css";
+
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --bg-soft: #171a21;
+  --bg-softer: #1e222b;
+  --bg-hover: #262b36;
+  --border: #2a2f3a;
+  --border-strong: #3a4150;
+  --text: #e6e8ee;
+  --text-dim: #9aa1af;
+  --accent: #c9a227;
+  --accent-hover: #dab63a;
+  --accent-on: #14100a;
+  --accent-soft: rgba(201, 162, 39, 0.15);
+  --danger: #e06c6c;
+  --ok: #6cc98f;
+  --nav-bg: rgba(15, 17, 21, 0.9);
+  --overlay-bg: rgba(0, 0, 0, 0.7);
+  --thumb-bg: radial-gradient(120% 100% at 50% 36%, #262a33 0%, #14161c 58%, #0c0d11 100%);
+  --glow-bg: #0d0e12;
+  --shadow: 0 10px 26px rgba(0, 0, 0, 0.35);
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f3f4f7;
+  --bg-soft: #ffffff;
+  --bg-softer: #eceef2;
+  --bg-hover: #e2e5ea;
+  --border: #d9dde4;
+  --border-strong: #c3c9d4;
+  --text: #23272f;
+  --text-dim: #6b7280;
+  --accent: #9a7b1a;
+  --accent-hover: #b08e20;
+  --accent-on: #ffffff;
+  --accent-soft: rgba(154, 123, 26, 0.12);
+  --danger: #c94848;
+  --ok: #2e9e5f;
+  --nav-bg: rgba(255, 255, 255, 0.88);
+  --overlay-bg: rgba(20, 22, 28, 0.55);
+  --thumb-bg: radial-gradient(120% 100% at 50% 36%, #e8eaef 0%, #d4d8e0 58%, #c6cbd5 100%);
+  --glow-bg: #d8dbe2;
+  --shadow: 0 10px 26px rgba(30, 35, 45, 0.18);
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family:
+    -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+    "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 14px;
+}
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-softer);
+  color: var(--text);
+  padding: 6px 14px;
+  transition: background 0.15s, border-color 0.15s;
+}
+button:hover:not(:disabled) {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-on);
+  font-weight: 600;
+}
+button.primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+button.danger {
+  border-color: rgba(224, 108, 108, 0.5);
+  color: var(--danger);
+}
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  outline: none;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+}
+textarea {
+  resize: vertical;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  line-height: 1.5;
+}
+.card {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    animation-duration: 0.001ms !important;
+  }
+}
