@@ -25,13 +25,21 @@
 
 ## 界面预览
 
-| 照片墙 | 详情与信息面板 |
-| --- | --- |
-| ![照片墙](docs/photos-wall.jpg) | ![详情](docs/photo-detail.jpg) |
+照片墙：全量照片按拍摄日期分组排布，AI 评分与装裱状态一目了然，支持筛选、批量标记与时间轴快速跳转。
 
-| 任务队列 | 轮播（漫画化） |
-| --- | --- |
-| ![任务队列](docs/queue.jpg) | ![轮播](docs/frame-cartoon.jpg) |
+![照片墙](docs/photos-wall.jpg)
+
+详情与信息面板：查看 AI 评分理由、构图指令、拍摄地点地图，可点赞/点踩、重新打分装裱、生成漫画图、下载装裱成品。
+
+![详情](docs/photo-detail.jpg)
+
+任务队列：审核、构图、相似分析、漫画化四组队列独立并发，可暂停/恢复，赞踩审美记忆攒够自动学习。
+
+![任务队列](docs/queue.jpg)
+
+轮播相框：装裱后的照片全屏轮播，漫画化照片直接以漫画图展示，配时钟/日历浮层。
+
+![轮播](docs/frame-cartoon.jpg)
 
 ## 功能特性
 
@@ -85,6 +93,10 @@ docker compose up -d
 
 - **macOS**：[Plash](https://github.com/sindresorhus/Plash)（免费开源）——把任意网页设为桌面壁纸，填入轮播页地址即可，支持定时刷新；
 - **Windows**：[Lively Wallpaper](https://github.com/rocksdanister/lively)（免费开源）——添加「网页」类型壁纸，填入轮播页地址，多显示器也支持。
+
+实际效果：轮播页嵌进 macOS 桌面（Plash），装裱题字的照片在桌面背景里自动轮播，与小组件共存。
+
+![桌面嵌入轮播](docs/desktop-frame.jpg)
 
 也可以用详情页的「下载装裱图」把喜欢的装裱成品存成 JPEG，交给系统自带的壁纸轮播（macOS：系统设置 → 墙纸 → 添加相簿；Windows：设置 → 个性化 → 背景 → 幻灯片放映）。
 
