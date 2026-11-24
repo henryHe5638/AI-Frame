@@ -11,7 +11,7 @@ pnpm --filter server dev      # tsx watch，端口 3000（PORT 可覆盖）
 pnpm --filter server start    # 运行 dist
 ```
 
-数据库文件：`server/data/app.db`（已 gitignore）。`POST /api/import/db` 替换前会自动备份为 `app.db.bak-<时间戳>`（同属 data 目录）。可选环境变量见根目录 `.env.example`。
+数据库文件：`server/data/app.db`（已 gitignore）。`POST /api/import/zip` 替换前会自动备份为 `app.db.bak-<时间戳>`（同属 data 目录），卡通画目录备份为 `cartoon.bak-<时间戳>`。可选环境变量见根目录 `.env.example`。
 
 ## 目录结构
 
@@ -78,10 +78,8 @@ Base URL：`http://localhost:3000`。所有接口前缀 `/api`，CORS 全开。
 | --- | --- | --- |
 | GET | `/api/settings` | 返回脱敏 Settings |
 | PUT | `/api/settings` | 部分更新（深度合并）。**apiKey 传 `"****xxxx"` 脱敏值表示不修改**，传新值则覆盖 |
-| GET | `/api/export` | `{version, exportedAt, settings(不含任何 key), photos[]}` |
-| POST | `/api/import` | body 为 export 的 JSON。照片按 immichId upsert；`overwriteSettings:true` 时覆盖设置（baseUrl/model/prompt/阈值等），**永不覆盖已保存的 API key** |
-| GET | `/api/export/db` | 导出整个 SQLite 库（先 `wal_checkpoint(TRUNCATE)`），`application/octet-stream` 附件下载，文件名 `ai-art-frame-YYYYMMDD.db` |
-| POST | `/api/import/db` | body 为 `application/octet-stream` 的 db 文件。校验 `SQLite format 3` 文件头并试开，备份当前库为 `app.db.bak-<时间戳>` 后替换 `app.db`；返回 `{ok:true, restartRequired:true, backup}` 并 **退出进程**（dev 下由 tsx watch 自动重跑恢复；生产环境需进程管理器或手动重启） |
+| GET | `/api/export/zip` | 导出备份 zip（deflate 压缩）：`app.db`（先 `wal_checkpoint(TRUNCATE)`，含全部设置与照片数据）+ `cartoon/` 下全部卡通画，`application/zip` 附件下载，文件名 `ai-art-frame-backup-YYYYMMDD.zip` |
+| POST | `/api/import/zip` | body 为 `application/octet-stream` 的备份 zip。解析校验 zip 与 `app.db`（文件头 + 试开），备份当前库为 `app.db.bak-<时间戳>`、卡通画目录为 `cartoon.bak-<时间戳>` 后替换；`?overwriteSettings=true` 时用备份中的设置整体覆盖（含 API key），默认保留当前设置。返回 `{ok, restartRequired, backup, cartoons, settingsOverwritten}` 并 **退出进程**（dev 下由 tsx watch 自动重跑恢复；生产环境需进程管理器或手动重启） |
 
 ### compose 指令（instruction）格式
 

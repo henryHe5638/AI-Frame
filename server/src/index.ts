@@ -19,7 +19,8 @@ import { FONTS_DIR } from "./fonts.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT ?? 3000);
 
-const app = Fastify({ logger: true });
+// bodyLimit 放宽到 2GiB：备份 zip（数据库 + 卡通画）经 application/octet-stream 整体上传
+const app = Fastify({ logger: true, bodyLimit: 2 * 1024 * 1024 * 1024 });
 
 await app.register(cors, { origin: true });
 

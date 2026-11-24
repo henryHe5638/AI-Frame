@@ -6,3 +6,6 @@ server/data/
 
 # docker compose 挂载的本地数据
 /data/
+
+# 本地部署记录（不上传）
+deploy.local.md

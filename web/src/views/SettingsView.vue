@@ -3,13 +3,11 @@ import { computed, onMounted, ref } from "vue";
 import {
   createUser,
   deleteUser,
-  exportData,
-  exportDb,
+  exportBackup,
   fetchModels,
   fetchSettings,
   fetchUsers,
-  importData,
-  importDb,
+  importBackup,
   logout,
   regenerateMemory,
   saveSettings,
@@ -32,10 +30,8 @@ const msg = ref("");
 const msgOk = ref(true);
 const memoryRegen = ref<"" | "compose" | "audit">("");
 const overwriteSettings = ref(false);
-const importFile = ref<File | null>(null);
-const migrating = ref(false);
-const dbImporting = ref(false);
-const dbFileInput = ref<HTMLInputElement | null>(null);
+const backupFileInput = ref<HTMLInputElement | null>(null);
+const backupBusy = ref(false);
 /** 用户管理 */
 const users = ref<AuthUser[]>([]);
 const newUserName = ref("");
@@ -213,61 +209,34 @@ async function onResetHudLayout(): Promise<void> {
   flash("已恢复本设备时钟 / 日历默认位置与大小（布局按设备保存，其他设备需在各自页面上重置）");
 }
 
-async function onExport(): Promise<void> {
-  migrating.value = true;
-  try {
-    await exportData();
-    flash("已导出");
-  } catch (e) {
-    flash(e instanceof Error ? e.message : "导出失败", false);
-  } finally {
-    migrating.value = false;
-  }
+function onExport(): void {
+  exportBackup();
+  flash("已开始下载备份包（含数据库与卡通画）");
 }
 
-async function onImport(): Promise<void> {
-  if (!importFile.value) {
-    flash("请先选择导出 JSON 文件", false);
-    return;
-  }
-  migrating.value = true;
-  try {
-    const data: unknown = JSON.parse(await importFile.value.text());
-    const r = await importData(data, overwriteSettings.value);
-    flash(`导入完成：${r.imported ?? "?"} 张照片`);
-    settings.value = await fetchSettings();
-  } catch (e) {
-    flash(e instanceof Error ? e.message : "导入失败", false);
-  } finally {
-    migrating.value = false;
-  }
-}
-
-function onFileChange(e: Event): void {
-  const input = e.target as HTMLInputElement;
-  importFile.value = input.files?.[0] ?? null;
-}
-
-function onExportDb(): void {
-  exportDb();
-  flash("已开始下载数据库文件");
-}
-
-function onDbFileChange(e: Event): void {
+function onBackupFileChange(e: Event): void {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0] ?? null;
   input.value = "";
   if (!file) return;
-  if (!confirm(`将导入数据库「${file.name}」覆盖当前数据，导入后服务会自动重启，约 5 秒后刷新页面。确定继续？`)) return;
-  dbImporting.value = true;
-  importDb(file)
-    .then(() => {
-      flash("导入成功，服务正在重启，约 5 秒后自动刷新…");
+  const ow = overwriteSettings.value;
+  if (
+    !confirm(
+      `将导入备份「${file.name}」覆盖当前数据（含卡通画），` +
+        (ow ? "设置也将被备份中的设置覆盖（含 API Key）。" : "当前设置与 API Key 将保留。") +
+        "导入后服务会自动重启，约 5 秒后刷新页面。确定继续？"
+    )
+  )
+    return;
+  backupBusy.value = true;
+  importBackup(file, ow)
+    .then((r) => {
+      flash(`导入成功（恢复卡通画 ${r.cartoons ?? 0} 张），服务正在重启，约 5 秒后自动刷新…`);
       window.setTimeout(() => location.reload(), 5000);
     })
     .catch((e: unknown) => {
       flash(e instanceof Error ? e.message : "导入失败", false);
-      dbImporting.value = false;
+      backupBusy.value = false;
     });
 }
 
@@ -672,32 +641,29 @@ async function onLogout(): Promise<void> {
       <section class="card group">
         <h3>数据迁移</h3>
         <div class="row two">
-          <button :disabled="migrating" @click="onExport">导出 JSON</button>
-          <div class="import">
-            <input type="file" accept="application/json,.json" @change="onFileChange" />
-            <label class="ow">
-              <input v-model="overwriteSettings" type="checkbox" />
-              同时覆盖设置（不含 API Key）
-            </label>
-            <button class="primary" :disabled="migrating" @click="onImport">导入</button>
-          </div>
-        </div>
-        <div class="row two">
-          <button :disabled="dbImporting" @click="onExportDb">导出数据库 (.db)</button>
+          <button :disabled="backupBusy" @click="onExport">导出备份 (.zip)</button>
           <div class="import">
             <input
-              ref="dbFileInput"
+              ref="backupFileInput"
               type="file"
-              accept=".db,application/octet-stream"
+              accept=".zip,application/zip"
               class="hidden-input"
-              @change="onDbFileChange"
+              @change="onBackupFileChange"
             />
-            <button class="primary" :disabled="dbImporting" @click="dbFileInput?.click()">
-              {{ dbImporting ? "导入中…" : "导入数据库 (.db)" }}
+            <label class="ow">
+              <input v-model="overwriteSettings" type="checkbox" />
+              同时覆盖设置（含 API Key）
+            </label>
+            <button class="primary" :disabled="backupBusy" @click="backupFileInput?.click()">
+              {{ backupBusy ? "导入中…" : "导入备份 (.zip)" }}
             </button>
-            <span class="hint-inline">导入会覆盖现有数据，服务将自动重启，约 5 秒后刷新页面</span>
           </div>
         </div>
+        <p class="hint">
+          备份包为 zip（已压缩），内含数据库（照片记录、评分、装裱与设置）和全部卡通画。
+          导入会覆盖现有数据与卡通画，服务将自动重启，约 5 秒后刷新页面；勾选「覆盖设置」则用备份中的设置
+          （含 API Key）整体替换，否则保留当前设置。
+        </p>
       </section>
 
       <div class="footer">

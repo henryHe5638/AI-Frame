@@ -4,7 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Database from "better-sqlite3";
-import { db, DB_PATH } from "../db.js";
+import { db, DB_PATH, DATA_DIR } from "../db.js";
+import { buildZip, extractZip, type ZipEntry } from "../zip.js";
 import {
   getSettings,
   updateSettings,
@@ -123,7 +124,7 @@ function stripMasked(patch: SettingsPatch): SettingsPatch {
 }
 
 export default async function settingsRoutes(app: FastifyInstance): Promise<void> {
-  // 允许 POST /api/import/db 直接以 application/octet-stream 上传 db 文件（避免引入 multipart 依赖）
+  // 允许 POST /api/import/zip 直接以 application/octet-stream 上传备份文件（避免引入 multipart 依赖）
   app.addContentTypeParser(
     "application/octet-stream",
     { parseAs: "buffer" },
@@ -268,196 +269,86 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     });
   });
 
-  /** 导出：settings（脱敏，不含 API key）+ photos 全量 */
-  app.get("/api/export", async () => {
-    const photos = db.prepare("SELECT * FROM photos ORDER BY id").all();
-    const s = getSettings();
-    const { immichApiKey: _i, audit, compose, ...rest } = s;
-    const exportSettings = {
-      ...rest,
-      audit: { baseUrl: audit.baseUrl, model: audit.model, prompt: audit.prompt, thinking: audit.thinking },
-      compose: {
-        baseUrl: compose.baseUrl,
-        model: compose.model,
-        prompt: compose.prompt,
-        thinking: compose.thinking,
-        cartoonEnabled: compose.cartoonEnabled,
-        cartoonModel: compose.cartoonModel,
-        cartoonPrompt: compose.cartoonPrompt,
-      },
-    };
-    return {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      settings: exportSettings,
-      photos,
-    };
-  });
+  /** 备份文件名（yyyymmdd） */
+  const backupStamp = (): string => new Date().toISOString().slice(0, 10).replace(/-/g, "");
+
+  /** 收集卡通画目录下的所有文件为 zip 条目（cartoon/<文件名>） */
+  function collectCartoonEntries(): ZipEntry[] {
+    const dir = path.join(DATA_DIR, "cartoon");
+    if (!fs.existsSync(dir)) return [];
+    const out: ZipEntry[] = [];
+    for (const f of fs.readdirSync(dir)) {
+      const fp = path.join(dir, f);
+      if (fs.statSync(fp).isFile()) out.push({ name: `cartoon/${f}`, data: fs.readFileSync(fp) });
+    }
+    return out;
+  }
 
   /**
-   * 导入：照片按 id upsert；设置可选覆盖（overwriteSettings=true），
-   * 默认不覆盖已有 AI key / immich key。
+   * 导出备份 zip（deflate 压缩）：app.db（含全部设置与照片数据）+ cartoon/ 下所有卡通画。
+   * 导出前先 TRUNCATE checkpoint 把 WAL 合并回主库，保证库文件完整一致。
    */
-  app.post("/api/import", async (req, reply) => {
-    const body = req.body as
-      | {
-          settings?: Record<string, unknown>;
-          photos?: Array<Record<string, unknown>>;
-          overwriteSettings?: boolean;
-        }
-      | undefined;
-    if (!body || !Array.isArray(body.photos)) {
-      return reply.code(400).send({ error: "body 需包含 photos 数组" });
-    }
-
-    const upsert = db.prepare(
-      `INSERT INTO photos (immichId, fileName, takenAt, createdAt, updatedAt, width, height,
-        clarity, beauty, story, totalScore, reason, auditStatus, composeStatus, instruction, error)
-       VALUES (@immichId, @fileName, @takenAt, @createdAt, @updatedAt, @width, @height,
-        @clarity, @beauty, @story, @totalScore, @reason, @auditStatus, @composeStatus, @instruction, @error)
-       ON CONFLICT(immichId) DO UPDATE SET
-        fileName=excluded.fileName, takenAt=excluded.takenAt, createdAt=excluded.createdAt,
-        updatedAt=excluded.updatedAt, width=excluded.width, height=excluded.height,
-        clarity=excluded.clarity, beauty=excluded.beauty, story=excluded.story,
-        totalScore=excluded.totalScore, reason=excluded.reason,
-        auditStatus=excluded.auditStatus, composeStatus=excluded.composeStatus,
-        instruction=excluded.instruction, error=excluded.error,
-        updatedLocalAt=datetime('now')`
-    );
-    let imported = 0;
-    const tx = db.transaction(() => {
-      for (const p of body.photos!) {
-        if (typeof p.immichId !== "string" || !p.immichId) continue;
-        upsert.run({
-          immichId: p.immichId,
-          fileName: p.fileName ?? null,
-          takenAt: p.takenAt ?? null,
-          createdAt: p.createdAt ?? null,
-          updatedAt: p.updatedAt ?? null,
-          width: p.width ?? null,
-          height: p.height ?? null,
-          clarity: p.clarity ?? null,
-          beauty: p.beauty ?? null,
-          story: p.story ?? null,
-          totalScore: p.totalScore ?? null,
-          reason: p.reason ?? null,
-          auditStatus: typeof p.auditStatus === "string" ? p.auditStatus : "pending",
-          composeStatus: typeof p.composeStatus === "string" ? p.composeStatus : "pending",
-          instruction:
-            typeof p.instruction === "string"
-              ? p.instruction
-              : p.instruction != null
-                ? JSON.stringify(p.instruction)
-                : null,
-          error: null,
-        });
-        imported++;
-      }
-    });
-    tx();
-
-    if (body.overwriteSettings && body.settings) {
-      const patch = body.settings as SettingsPatch & { audit?: Record<string, unknown>; compose?: Record<string, unknown> };
-      // 导入的设置不含 API key，剔除 undefined，且不覆盖现有 key
-      const cleaned: SettingsPatch = {};
-      for (const k of [
-        "immichBaseUrl",
-        "pollIntervalSec",
-        "webhookEnabled",
-        "auditPaused",
-        "composePaused",
-        "dhashPaused",
-        "frameFit",
-        "frameShowClock",
-        "frameShowCalendar",
-        "publicBaseUrl",
-        "frameClockLayout",
-        "frameCalendarLayout",
-        "framePreferAspect",
-        "frameIntervalSec",
-        "dedupEnabled",
-        "localDedupEnabled",
-        "localDedupThreshold",
-        "localDedupWindowMin",
-        "clarityThreshold",
-        "beautyThreshold",
-        "storyThreshold",
-        "auditConcurrency",
-        "composeConcurrency",
-        "dhashConcurrency",
-        "cartoonConcurrency",
-        "cartoonPaused",
-        "cartoonRatio",
-        "auditBatchSize",
-        "composeBatchSize",
-        "memoryEnabled",
-        "memoryThreshold",
-        "memoryComposePrompt",
-        "memoryAuditPrompt",
-      ] as const) {
-        const v = (patch as Record<string, unknown>)[k];
-        if (v !== undefined) (cleaned as Record<string, unknown>)[k] = v;
-      }
-      for (const g of ["audit", "compose"] as const) {
-        const src = patch[g];
-        if (!src) continue;
-        const dst: Record<string, unknown> = {};
-        for (const k of ["baseUrl", "model", "prompt", "thinking"]) {
-          if (typeof src[k] === "string") dst[k] = src[k];
-        }
-        if (g === "compose") {
-          if (typeof src.cartoonEnabled === "boolean") dst.cartoonEnabled = src.cartoonEnabled;
-          if (typeof src.cartoonModel === "string") dst.cartoonModel = src.cartoonModel;
-          if (typeof src.cartoonPrompt === "string") dst.cartoonPrompt = src.cartoonPrompt;
-        }
-        (cleaned as Record<string, unknown>)[g] = dst;
-      }
-      updateSettings(cleaned);
-    }
-
-    return reply.send({ ok: true, imported, settingsOverwritten: !!body.overwriteSettings });
-  });
-
-  /** 导出 SQLite 数据库文件：先 TRUNCATE checkpoint 把 WAL 合并回主库，再整体下载 */
-  app.get("/api/export/db", async (_req, reply) => {
+  app.get("/api/export/zip", async (_req, reply) => {
     db.pragma("wal_checkpoint(TRUNCATE)");
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    const buffer = fs.readFileSync(DB_PATH);
-    reply.header(
-      "Content-Disposition",
-      `attachment; filename="ai-art-frame-${date}.db"`
-    );
-    return reply.type("application/octet-stream").send(buffer);
+    const zip = buildZip([{ name: "app.db", data: fs.readFileSync(DB_PATH) }, ...collectCartoonEntries()]);
+    reply.header("Content-Disposition", `attachment; filename="ai-art-frame-backup-${backupStamp()}.zip"`);
+    return reply.type("application/zip").send(zip);
   });
 
   /**
-   * 导入 SQLite 数据库文件（body 为 application/octet-stream 的 db 文件）。
-   * 行为：校验 'SQLite format 3' 文件头 → 备份当前库为 app.db.bak-<时间戳> →
-   * 替换 app.db → 返回 {ok:true, restartRequired:true} → process.exit(0)。
-   * 退出后由进程管理器拉起；dev（tsx watch）场景下额外派生一个看门狗子进程，
-   * 在退出后 touch src/index.ts 触发 tsx watch 重跑（实测 tsx watch 不会在子进程
-   * 退出后自动重启，只靠文件变化触发）。若无任何进程管理，请手动重启服务。
+   * 导入备份 zip（body 为 application/octet-stream 的 zip 文件）。
+   * query: overwriteSettings=true 用备份里的设置整体覆盖（含 API Key）；
+   *        默认 false，保留当前设置（含全部 API Key），只恢复照片数据与卡通画。
+   * 流程：解析校验 zip → 校验 app.db → 备份当前库与卡通画目录 → 落盘新库与卡通画 →
+   * （可选）把当前设置写回新库 → 返回 {ok, restartRequired} 后自动重启（看门狗 touch src/index.ts 触发 tsx watch 重跑）。
    */
-  app.post("/api/import/db", async (req, reply) => {
+  app.post<{ Querystring: { overwriteSettings?: string } }>("/api/import/zip", async (req, reply) => {
+    const overwriteSettings = req.query.overwriteSettings === "true";
     const body = req.body;
-    if (!Buffer.isBuffer(body) || body.length < 16) {
-      return reply.code(400).send({ ok: false, error: "body 需为 SQLite db 文件（application/octet-stream）" });
+    if (!Buffer.isBuffer(body) || body.length < 22) {
+      return reply.code(400).send({ ok: false, error: "body 需为备份 zip 文件（application/octet-stream）" });
     }
-    if (body.subarray(0, 15).toString("latin1") !== "SQLite format 3") {
-      return reply.code(400).send({ ok: false, error: "不是合法的 SQLite 文件（缺少 'SQLite format 3' 文件头）" });
+
+    let entries: ZipEntry[];
+    try {
+      entries = extractZip(body);
+    } catch (e) {
+      return reply.code(400).send({ ok: false, error: `zip 解析失败：${(e as Error).message}` });
+    }
+    const dbEntry = entries.find((e) => e.name === "app.db");
+    if (!dbEntry || dbEntry.data.length < 16) {
+      return reply.code(400).send({ ok: false, error: "备份包中缺少 app.db" });
+    }
+    if (dbEntry.data.subarray(0, 15).toString("latin1") !== "SQLite format 3") {
+      return reply.code(400).send({ ok: false, error: "备份包中的 app.db 不是合法的 SQLite 文件" });
     }
     // 写入临时文件后用 better-sqlite3 试开，确认文件结构可读
     const tmpPath = path.join(path.dirname(DB_PATH), `.import-${Date.now()}.db`);
-    fs.writeFileSync(tmpPath, body);
+    fs.writeFileSync(tmpPath, dbEntry.data);
     try {
       const probe = new Database(tmpPath, { readonly: true });
       probe.pragma("schema_version");
       probe.close();
     } catch {
       fs.rmSync(tmpPath, { force: true });
-      return reply.code(400).send({ ok: false, error: "SQLite 文件损坏或无法打开" });
+      return reply.code(400).send({ ok: false, error: "备份包中的 SQLite 文件损坏或无法打开" });
     }
     fs.rmSync(tmpPath, { force: true });
+
+    // 卡通画条目：zip slip 防护，只取文件名部分
+    const cartoonEntries = entries
+      .filter((e) => e.name.startsWith("cartoon/") && !e.name.endsWith("/"))
+      .map((e) => ({ file: path.basename(e.name), data: e.data }))
+      .filter((e) => e.file && e.file !== "." && e.file !== "..");
+
+    // 不覆盖设置时，先读出当前设置，落盘新库后再写回
+    let keepSettings: string | null = null;
+    if (!overwriteSettings) {
+      const row = db.prepare("SELECT value FROM settings WHERE key = 'app'").get() as
+        | { value: string }
+        | undefined;
+      keepSettings = row?.value ?? null;
+    }
 
     // 合并 WAL 后关闭连接，再备份/替换文件
     db.pragma("wal_checkpoint(TRUNCATE)");
@@ -468,7 +359,25 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     for (const suffix of ["-wal", "-shm"]) {
       fs.rmSync(`${DB_PATH}${suffix}`, { force: true });
     }
-    fs.writeFileSync(DB_PATH, body);
+    fs.writeFileSync(DB_PATH, dbEntry.data);
+
+    // 卡通画目录整体替换（旧目录备份为 cartoon.bak-<时间戳>）
+    const cartoonDir = path.join(DATA_DIR, "cartoon");
+    const hadCartoon = fs.existsSync(cartoonDir);
+    if (hadCartoon) fs.renameSync(cartoonDir, `${cartoonDir}.bak-${ts}`);
+    fs.mkdirSync(cartoonDir, { recursive: true });
+    for (const e of cartoonEntries) {
+      fs.writeFileSync(path.join(cartoonDir, e.file), e.data);
+    }
+
+    // 保留当前设置：写回新库
+    if (keepSettings != null) {
+      const restored = new Database(DB_PATH);
+      restored
+        .prepare("INSERT INTO settings (key, value) VALUES ('app', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+        .run(keepSettings);
+      restored.close();
+    }
 
     // 看门狗：本进程退出 1.2s 后 touch src/index.ts，触发 tsx watch 重跑
     const watchTarget = path.resolve(__dirname, "../index.ts");
@@ -480,7 +389,13 @@ export default async function settingsRoutes(app: FastifyInstance): Promise<void
     );
     dog.unref();
 
-    await reply.send({ ok: true, restartRequired: true, backup: path.basename(backupPath) });
+    await reply.send({
+      ok: true,
+      restartRequired: true,
+      backup: path.basename(backupPath),
+      cartoons: cartoonEntries.length,
+      settingsOverwritten: overwriteSettings,
+    });
     setTimeout(() => process.exit(0), 300);
   });
 }

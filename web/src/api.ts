@@ -469,31 +469,25 @@ export function regenerateMemory(kind: "compose" | "audit"): Promise<{ ok: boole
   return request(`/api/settings/memory/${kind}/regenerate`, { method: "POST" });
 }
 
-export async function exportData(): Promise<void> {
-  const res = await fetch("/api/export");
-  if (!res.ok) throw new Error(`导出失败：HTTP ${res.status}`);
-  const blob = await res.blob();
-  const url = URL.createObjectURL(blob);
+/** 导出备份 zip（数据库 + 卡通画，deflate 压缩；服务端 Content-Disposition attachment） */
+export function exportBackup(): void {
   const a = document.createElement("a");
-  a.href = url;
-  a.download = `ai-art-frame-export-${new Date().toISOString().slice(0, 10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-/** 导出 SQLite 数据库文件（服务端 Content-Disposition attachment） */
-export function exportDb(): void {
-  const a = document.createElement("a");
-  a.href = "/api/export/db";
+  a.href = "/api/export/zip";
   a.download = "";
   document.body.appendChild(a);
   a.click();
   a.remove();
 }
 
-/** 导入 SQLite 数据库文件（body 为文件字节）；成功后服务自动重启 */
-export async function importDb(file: File): Promise<void> {
-  const res = await fetch("/api/import/db", {
+/**
+ * 导入备份 zip（body 为文件字节）；成功后服务自动重启。
+ * overwriteSettings=true 时用备份里的设置整体覆盖（含 API Key），否则保留当前设置。
+ */
+export async function importBackup(
+  file: File,
+  overwriteSettings: boolean
+): Promise<{ cartoons?: number }> {
+  const res = await fetch(`/api/import/zip?overwriteSettings=${overwriteSettings}`, {
     method: "POST",
     headers: { "Content-Type": "application/octet-stream" },
     body: await file.arrayBuffer(),
@@ -509,17 +503,7 @@ export async function importDb(file: File): Promise<void> {
     }
     throw new Error(msg);
   }
-}
-
-export function importData(
-  data: unknown,
-  overwriteSettings: boolean
-): Promise<{ ok: boolean; imported?: number; error?: string }> {
-  return request("/api/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...(data as Record<string, unknown>), overwriteSettings }),
-  });
+  return (await res.json()) as { cartoons?: number };
 }
 
 export type FrameFit = "contain" | "cover" | "stretch";
